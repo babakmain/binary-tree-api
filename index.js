@@ -1,23 +1,22 @@
-import { Client, Databases, ID, Query } from 'node-appwrite';
-import crypto from 'node:crypto';
+const sdk = require('node-appwrite');
+const crypto = require('crypto');
 
-export default async function handler({ req, res, log, error }) {
-  const client = new Client()
+module.exports = async function (req, res) {
+  const client = new sdk.Client()
     .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT || 'https://cloud.appwrite.io/v1')
     .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
     .setKey(process.env.APPWRITE_API_KEY);
 
-  const databases = new Databases(client);
+  const databases = new sdk.Databases(client);
 
   const DB_ID = 'main';
   const USERS = 'users';
   const INVITES = 'invite_codes';
 
-  let body = {};
+  let body;
   try {
     body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
   } catch (e) {
-    log('Invalid payload');
     return res.json({ error: 'invalid json' }, 400);
   }
 
@@ -36,7 +35,7 @@ export default async function handler({ req, res, log, error }) {
 
     const code = crypto.randomBytes(32).toString('hex');
 
-    await databases.createDocument(DB_ID, INVITES, ID.unique(), {
+    await databases.createDocument(DB_ID, INVITES, sdk.ID.unique(), {
       code,
       owner_user_id: ownerId,
       is_used: false,
@@ -52,8 +51,8 @@ export default async function handler({ req, res, log, error }) {
     if (!telegram_id || !invite_code) return res.json({ error: 'telegram_id و invite_code لازم است' }, 400);
 
     const invites = await databases.listDocuments(DB_ID, INVITES, [
-      Query.equal('code', invite_code),
-      Query.equal('is_used', false)
+      sdk.Query.equal('code', invite_code),
+      sdk.Query.equal('is_used', false)
     ]);
 
     if (invites.documents.length === 0) {
@@ -68,7 +67,6 @@ export default async function handler({ req, res, log, error }) {
       return res.json({ error: 'این کاربر قبلاً ثبت شده' }, 409);
     } catch {}
 
-    // weak leg placement با ایمنی
     let current = parentId;
     let side = null;
     let depth = 0;
@@ -143,4 +141,4 @@ export default async function handler({ req, res, log, error }) {
   }
 
   return res.json({ error: 'action نامعتبر' }, 400);
-}
+};
