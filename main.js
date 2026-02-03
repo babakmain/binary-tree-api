@@ -5,9 +5,8 @@ module.exports = async function (context) {
   const req = context.req;
   const res = context.res;
   const log = context.log || console.log;
-  const errorLog = context.error || console.error;
 
-  log('Execution started');
+  log('شروع اجرا');
 
   const client = new sdk.Client()
     .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT || 'https://cloud.appwrite.io/v1')
@@ -23,14 +22,14 @@ module.exports = async function (context) {
   let body = {};
   try {
     body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
-    log('Parsed body:', body);
+    log('دریافتی body:', body);
   } catch (e) {
-    log('JSON parse error:', e.message);
-    return res.json({ error: 'invalid json' }, 400);
+    log('خطا در parse body:', e.message);
+    return res.json({ error: 'json نامعتبر' }, 400);
   }
 
   const action = body.action || '';
-  log('Action received:', action);
+  log('action دریافتی:', action);
 
   if (action === 'create-invite') {
     const ownerId = body.owner_user_id;
@@ -38,13 +37,12 @@ module.exports = async function (context) {
 
     try {
       await databases.getDocument(DB_ID, USERS, ownerId);
-    } catch (e) {
-      log('Owner not found:', e.message);
+    } catch {
       return res.json({ error: 'کاربر والد پیدا نشد' }, 404);
     }
 
     const code = crypto.randomBytes(32).toString('hex');
-    log('Generated code:', code);
+    log('کد ساخته شد:', code);
 
     await databases.createDocument(DB_ID, INVITES, sdk.ID.unique(), {
       code,
@@ -56,8 +54,8 @@ module.exports = async function (context) {
     return res.json({ code });
   }
 
-  // بخش register و get-user رو هم به همین شکل اضافه کن (فقط return res.json(...) باشه)
+  // بخش register و get-user رو هم همینجا کپی کن (مثل قبل)
 
-  log('No valid action');
+  log('action معتبر نبود');
   return res.json({ error: 'action نامعتبر' }, 400);
 };
