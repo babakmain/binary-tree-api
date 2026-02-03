@@ -6,7 +6,6 @@ module.exports = async function (context) {
   const res = context.res;
   const log = context.log || console.log;
 
-  // دو خط log اضافی برای دیباگ (همینجا گذاشتم)
   log('req.payload خام:', req.payload);
   log('req.body خام:', req.body);
 
@@ -25,8 +24,15 @@ module.exports = async function (context) {
 
   let body = {};
   try {
-    body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
-    log('دریافتی body:', body);
+    // اصلاح مهم: اول req.body چک می‌شه
+    if (req.body) {
+      body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+    }
+    // fallback به req.payload
+    else if (req.payload) {
+      body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
+    }
+    log('دریافتی body (اصلاح‌شده):', body);
   } catch (e) {
     log('خطا در parse body:', e.message);
     return res.json({ error: 'json نامعتبر' }, 400);
@@ -58,7 +64,7 @@ module.exports = async function (context) {
     return res.json({ code });
   }
 
-  // اگر بخش register و get-user رو قبلاً داشتی، اینجا کپی‌شون کن (مثل قبل)
+  // اگر register یا get-user داری، اینجا اضافه کن (مثل قبل)
 
   log('action معتبر نبود');
   return res.json({ error: 'action نامعتبر' }, 400);
