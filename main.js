@@ -19,17 +19,13 @@ module.exports = async function (context) {
   const databases = new sdk.Databases(client);
 
   const DB_ID = 'network-db';
-  const USERS = 'useres';
-  const INVITES = 'invite_codes';
+  const USERS = 'users';  // یا 'useres' اگر ID هنوز همون است
 
   let body = {};
   try {
-    // اصلاح مهم: اول req.body چک می‌شه
     if (req.body) {
       body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    }
-    // fallback به req.payload
-    else if (req.payload) {
+    } else if (req.payload) {
       body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
     }
     log('دریافتی body (اصلاح‌شده):', body);
@@ -45,9 +41,14 @@ module.exports = async function (context) {
     const ownerId = body.owner_user_id;
     if (!ownerId) return res.json({ error: 'owner_user_id لازم است' }, 400);
 
+    log('در حال چک کاربر با ID:', ownerId);
+
     try {
-      await databases.getDocument(DB_ID, USERS, ownerId);
-    } catch {
+      const user = await databases.getDocument(DB_ID, USERS, ownerId);
+      log('کاربر پیدا شد:', user.$id);
+    } catch (e) {
+      log('خطا در پیدا کردن کاربر:', e.message);
+      log('کد خطا:', e.code);
       return res.json({ error: 'کاربر والد پیدا نشد' }, 404);
     }
 
@@ -63,8 +64,6 @@ module.exports = async function (context) {
 
     return res.json({ code });
   }
-
-  // اگر register یا get-user داری، اینجا اضافه کن (مثل قبل)
 
   log('action معتبر نبود');
   return res.json({ error: 'action نامعتبر' }, 400);
