@@ -6,6 +6,10 @@ module.exports = async function (context) {
   const res = context.res;
   const log = context.log || console.log;
 
+  // دو خط log اضافی برای دیباگ (همینجا گذاشتم)
+  log('req.payload خام:', req.payload);
+  log('req.body خام:', req.body);
+
   log('شروع اجرا');
 
   const client = new sdk.Client()
@@ -54,7 +58,7 @@ module.exports = async function (context) {
     return res.json({ code });
   }
 
-  // بخش register و get-user رو هم همینجا کپی کن (مثل قبل)
+  // اگر بخش register و get-user رو قبلاً داشتی، اینجا کپی‌شون کن (مثل قبل)
 
   log('action معتبر نبود');
   return res.json({ error: 'action نامعتبر' }, 400);
