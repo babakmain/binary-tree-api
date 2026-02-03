@@ -18,7 +18,7 @@ module.exports = async function (context) {
 
   const databases = new sdk.Databases(client);
 
-  const DB_ID = 'main';
+  const DB_ID = 'network-db';
   const USERS = 'users';
   const INVITES = 'invite_codes';
 
