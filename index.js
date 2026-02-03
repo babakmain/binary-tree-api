@@ -1,32 +1,29 @@
-const sdk = require('node-appwrite');
-const crypto = require('crypto');
+import { Client, Databases, ID, Query } from 'node-appwrite';
+import crypto from 'node:crypto';
 
-module.exports = async function (req, res) {
-  const client = new sdk.Client()
+export default async function handler({ req, res, log, error }) {
+  const client = new Client()
     .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT || 'https://cloud.appwrite.io/v1')
     .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY);  // ← اینو حتماً در Variables پروژه اضافه کن (API Key با scope databases)
+    .setKey(process.env.APPWRITE_API_KEY);
 
-  const databases = new sdk.Databases(client);
+  const databases = new Databases(client);
 
-  // تنظیمات (اینا رو می‌تونی در Variables پروژه هم بذاری)
-  const DB_ID = 'main';                   // یا هر چی که دیتابیست هست
+  const DB_ID = 'main';
   const USERS = 'users';
   const INVITES = 'invite_codes';
 
-  let body;
+  let body = {};
   try {
     body = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload || {};
   } catch (e) {
+    log('Invalid payload');
     return res.json({ error: 'invalid json' }, 400);
   }
 
   const action = body.action || '';
 
-  // ──────────────────────────────────────────────
-  // Action: create-invite
-  // ورودی: { action: "create-invite", owner_user_id: "..." }
-  // خروجی: { code: "..." }
+  // create-invite
   if (action === 'create-invite') {
     const ownerId = body.owner_user_id;
     if (!ownerId) return res.json({ error: 'owner_user_id لازم است' }, 400);
@@ -39,7 +36,7 @@ module.exports = async function (req, res) {
 
     const code = crypto.randomBytes(32).toString('hex');
 
-    await databases.createDocument(DB_ID, INVITES, sdk.ID.unique(), {
+    await databases.createDocument(DB_ID, INVITES, ID.unique(), {
       code,
       owner_user_id: ownerId,
       is_used: false,
@@ -49,18 +46,14 @@ module.exports = async function (req, res) {
     return res.json({ code });
   }
 
-  // ──────────────────────────────────────────────
-  // Action: register
-  // ورودی: { action: "register", telegram_id: "...", invite_code: "..." }
-  // خروجی: { success: true, user_id: "...", side: "left"|"right" }
+  // register
   if (action === 'register') {
     const { telegram_id, invite_code } = body;
     if (!telegram_id || !invite_code) return res.json({ error: 'telegram_id و invite_code لازم است' }, 400);
 
-    // چک کد دعوت معتبر و استفاده‌نشده
     const invites = await databases.listDocuments(DB_ID, INVITES, [
-      sdk.Query.equal('code', invite_code),
-      sdk.Query.equal('is_used', false)
+      Query.equal('code', invite_code),
+      Query.equal('is_used', false)
     ]);
 
     if (invites.documents.length === 0) {
@@ -70,16 +63,18 @@ module.exports = async function (req, res) {
     const invite = invites.documents[0];
     const parentId = invite.owner_user_id;
 
-    // چک نکن کاربر تکراری باشه
     try {
       await databases.getDocument(DB_ID, USERS, telegram_id);
       return res.json({ error: 'این کاربر قبلاً ثبت شده' }, 409);
     } catch {}
 
-    // پیدا کردن جای خالی (weak leg)
+    // weak leg placement با ایمنی
     let current = parentId;
     let side = null;
-    while (true) {
+    let depth = 0;
+    const MAX_DEPTH = 100;
+
+    while (depth < MAX_DEPTH) {
       const user = await databases.getDocument(DB_ID, USERS, current);
 
       if (!user.left_child) { side = 'left'; break; }
@@ -89,9 +84,13 @@ module.exports = async function (req, res) {
       const right = await databases.getDocument(DB_ID, USERS, user.right_child);
 
       current = left.subtree_size <= right.subtree_size ? user.left_child : user.right_child;
+      depth++;
     }
 
-    // ساخت کاربر جدید
+    if (depth >= MAX_DEPTH) {
+      return res.json({ error: 'درخت خیلی عمیق است' }, 500);
+    }
+
     await databases.createDocument(DB_ID, USERS, telegram_id, {
       telegram_id,
       parent_id: current,
@@ -102,22 +101,19 @@ module.exports = async function (req, res) {
       created_at: new Date().toISOString()
     });
 
-    // آپدیت والد (child جدید)
     await databases.updateDocument(DB_ID, USERS, current, {
       [`${side}_child`]: telegram_id
     });
 
-    // آپدیت subtree_size همه مسیر بالا
     let updater = current;
     while (updater) {
       const u = await databases.getDocument(DB_ID, USERS, updater);
       await databases.updateDocument(DB_ID, USERS, updater, {
-        subtree_size: u.subtree_size + 1
+        subtree_size: (u.subtree_size || 0) + 1
       });
       updater = u.parent_id || null;
     }
 
-    // سوزاندن کد
     await databases.updateDocument(DB_ID, INVITES, invite.$id, {
       is_used: true,
       used_by_user_id: telegram_id,
@@ -127,10 +123,7 @@ module.exports = async function (req, res) {
     return res.json({ success: true, user_id: telegram_id, placed_under: current, side });
   }
 
-  // ──────────────────────────────────────────────
-  // Action: get-user
-  // ورودی: { action: "get-user", telegram_id: "..." }
-  // خروجی: اطلاعات کاربر
+  // get-user
   if (action === 'get-user') {
     const telegram_id = body.telegram_id;
     if (!telegram_id) return res.json({ error: 'telegram_id لازم است' }, 400);
@@ -150,4 +143,4 @@ module.exports = async function (req, res) {
   }
 
   return res.json({ error: 'action نامعتبر' }, 400);
-};
+}
