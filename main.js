@@ -18,7 +18,7 @@ module.exports = async function (context) {
 
   const databases = new sdk.Databases(client);
 
-  const DB_ID = 'network-db';
+  const DB_ID = '697d0453002392b0eca0';  // ← این خط تغییر کرد
   const USERS = 'users';
   const INVITES = 'invite_codes';
 
@@ -38,7 +38,6 @@ module.exports = async function (context) {
   const action = body.action || '';
   log('action دریافتی:', action);
 
-  // create-invite
   if (action === 'create-invite') {
     const ownerId = body.owner_user_id;
     if (!ownerId) return res.json({ error: 'owner_user_id لازم است' }, 400);
@@ -67,7 +66,6 @@ module.exports = async function (context) {
     return res.json({ code });
   }
 
-  // register (اصلاح‌شده با لاگ حرفه‌ای)
   if (action === 'register') {
     const { telegram_id, invite_code } = body;
     if (!telegram_id || !invite_code) return res.json({ error: 'telegram_id و invite_code لازم است' }, 400);
@@ -81,7 +79,6 @@ module.exports = async function (context) {
 
     log('نتیجه جستجو کامل:', JSON.stringify(inviteRes, null, 2));
     log('تعداد اسناد پیدا شده:', inviteRes.documents.length);
-
     if (inviteRes.documents.length > 0) {
       log('اولین سند پیدا شده:', JSON.stringify(inviteRes.documents[0], null, 2));
     } else {
@@ -95,13 +92,11 @@ module.exports = async function (context) {
     const invite = inviteRes.documents[0];
     const parentId = invite.owner_user_id;
 
-    // چک تکراری نبودن کاربر
     try {
       await databases.getDocument(DB_ID, USERS, telegram_id);
       return res.json({ error: 'این کاربر قبلاً ثبت شده' }, 409);
     } catch {}
 
-    // پیدا کردن جای خالی (weak leg)
     let current = parentId;
     let side = null;
     let depth = 0;
@@ -124,7 +119,6 @@ module.exports = async function (context) {
       return res.json({ error: 'درخت خیلی عمیق است' }, 500);
     }
 
-    // ساخت کاربر جدید
     await databases.createDocument(DB_ID, USERS, telegram_id, {
       telegram_id,
       parent_id: current,
@@ -135,12 +129,10 @@ module.exports = async function (context) {
       created_at: new Date().toISOString()
     });
 
-    // آپدیت والد
     await databases.updateDocument(DB_ID, USERS, current, {
       [`${side}_child`]: telegram_id
     });
 
-    // آپدیت subtree_size مسیر بالا
     let updater = current;
     while (updater) {
       const u = await databases.getDocument(DB_ID, USERS, updater);
@@ -150,7 +142,6 @@ module.exports = async function (context) {
       updater = u.parent_id || null;
     }
 
-    // سوزاندن کد
     await databases.updateDocument(DB_ID, INVITES, invite.$id, {
       is_used: true,
       used_by_user_id: telegram_id,
@@ -160,7 +151,6 @@ module.exports = async function (context) {
     return res.json({ success: true, user_id: telegram_id, placed_under: current, side });
   }
 
-  // get-user
   if (action === 'get-user') {
     const telegram_id = body.telegram_id;
     if (!telegram_id) return res.json({ error: 'telegram_id لازم است' }, 400);
