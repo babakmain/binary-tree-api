@@ -18,8 +18,8 @@ module.exports = async function (context) {
 
   const databases = new sdk.Databases(client);
 
-  const DB_ID = '697d0453002392b0eca0';  // ← این خط تغییر کرد
-  const USERS = 'users';
+  const DB_ID = '697d0453002392b0eca0';
+  const USERS = 'useres';          // ← این خط اصلاح شد (قبلاً users بود)
   const INVITES = 'invite_codes';
 
   let body = {};
